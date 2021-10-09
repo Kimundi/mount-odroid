@@ -190,6 +190,7 @@ def main0():
         return p
 
 
+    print("[Mount Devices]")
     for dev in mountable:
         dev_path = f"/dev/{dev['kname']}"
         if dev.get('fstype') == "swap":
@@ -206,7 +207,8 @@ def main0():
             subprocess.run(["mount", "-o", "ro", dev_path, mount_path], check=True)
         collect()
 
-def main1():
-    pass
+    print()
+    print("All disks are available under /mnt and the mnt samba share")
+    print("Done")
 
 main0()
