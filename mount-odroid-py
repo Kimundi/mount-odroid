@@ -204,7 +204,7 @@ def main0():
         inp = input(f"Mount {dev_path} to {mount_path}? [y|n] ")
         if inp.startswith("y"):
             # mount -o ro /dev/sda2 /mnt/disk0
-            subprocess.run(["mount", "-o", "ro", dev_path, mount_path], check=True)
+            subprocess.run(["mount", "-o", "ro,noatime", dev_path, mount_path], check=True)
         collect()
 
     print()
