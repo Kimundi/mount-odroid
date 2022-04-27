@@ -68,7 +68,6 @@ class Device(BaseModel, extra=Extra.allow):
     fsused: Optional[int]
     fssize: Optional[int]
     fsavail: Optional[int]
-    ro: Optional[bool]
     mountpoint: Optional[str]
     mountpoints: List[Optional[str]]
     fsroots: List[Optional[str]]

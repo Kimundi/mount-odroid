@@ -13,7 +13,8 @@ from system_query import Device, DeviceList
 
 
 def passthrough(obj: Dict[str, Any], key: str) -> Any:
-    return obj.get(key)
+    e = obj.get(key)
+    return str(e) if e is not None else None
 
 
 def sizefmt(obj: Dict[str, Any], key: str) -> Any:
@@ -47,7 +48,11 @@ def filter_disk(dev: Device):
         "size": sizefmt,
         "model": passthrough,
         "serial": passthrough,
+        "pttype": passthrough,
+        "rota": passthrough,
     }
+
+    print(dev.json(indent=4))
 
     return {k: keys[k](dev.dict(), k) for k in keys}
 
