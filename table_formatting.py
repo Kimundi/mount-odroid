@@ -5,7 +5,10 @@ class TableFormatter:
     def __init__(self):
         self.ctx: Dict[str, Dict[str, Any]] = {}
 
-    def append(self, columns: Dict[str, str]):
+    def append(self, columns: Dict[str, str], header=True):
+        columns = {k: v for k, v in columns.items()}
+        columns["_header"] = header
+
         count = None
         for val in self.ctx.values():
             if count is None:
@@ -61,13 +64,15 @@ class TableFormatter:
                     break
                 column = columns[i]
 
-                if key == "size":
-                    line += f"{column:>{val['width']}}{sep}"
-                else:
-                    line += f"{column:{val['width']}}{sep}"
+                # if key == "size":
+                # line += f"{column:>{val['width']}}{sep}"
+                # else:
+                # line += f"{column:{val['width']}}{sep}"
+
+                line += f"{column:{val['width']}}{sep}"
             if breakout:
                 break
-            if self.ctx["_header"]["columns"][i] == "True":
+            if i == 0 or self.ctx["_header"]["columns"][i] == "True":
                 # print()
                 print("─" * len(line))
                 pass
@@ -76,3 +81,4 @@ class TableFormatter:
                 # print("─" * len(line))
                 pass
             i += 1
+        print()
