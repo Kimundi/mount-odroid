@@ -50,6 +50,8 @@ def filter_disk(dev: Device):
         "serial": passthrough,
         "pttype": passthrough,
         "rota": passthrough,
+        "ro": passthrough,
+        "rm": passthrough,
     }
 
     print(dev.json(indent=4))
@@ -101,14 +103,30 @@ def main():
     # print(json.dumps(disks, indent=4))
     disk_table = TableFormatter()
     for disk in disks:
-        disk_table.append(disk, False)
+        disk_table.append(
+            disk,
+            False,
+            align={
+                "size": ">",
+                "serial": ">",
+            },
+        )
     disk_table.print()
 
     print("[Partitions]")
     # print(json.dumps(parts, indent=4))
     part_table = TableFormatter()
     for part in parts:
-        part_table.append(part, False)
+        part_table.append(
+            part,
+            False,
+            align={
+                "size": ">",
+                "fssize": ">",
+                "fsavail": ">",
+                "serial": ">",
+            },
+        )
     part_table.print()
 
 
