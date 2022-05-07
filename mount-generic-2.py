@@ -102,6 +102,8 @@ def filter_part(dev: Device):
 @dataclass
 class CmdState:
     disks: List[dict]
+    disks_dict: Dict[str, dict]
+
     parts: List[dict]
     mounted: Dict[str, dict]
     unmounted: Dict[str, dict]
@@ -130,11 +132,16 @@ def cmd_state() -> CmdState:
         else:
             unmounted[f"U{len(unmounted)}"] = part
 
+    disks_dict = {}
+    for disk in disks:
+        disks_dict[f"D{len(disks_dict)}"] = disk
+
     return CmdState(
         disks=disks,
         parts=parts,
         mounted=mounted,
         unmounted=unmounted,
+        disks_dict=disks_dict,
     )
 
 
@@ -176,11 +183,19 @@ def cmd_show_parts(state: CmdState):
     part_table.print()
 
 
-def cmd_show_mounting(state: CmdState):
-    for part_kind_name, part_dict in [
-        ("Mounted", state.mounted),
-        ("Unmounted", state.unmounted),
-    ]:
+def cmd_show_mounting(state: CmdState, flip=False):
+    if flip:
+        cases = [
+            ("Unmounted", state.unmounted),
+            ("Mounted", state.mounted),
+        ]
+    else:
+        cases = [
+            ("Mounted", state.mounted),
+            ("Unmounted", state.unmounted),
+        ]
+
+    for part_kind_name, part_dict in cases:
         print_heading(f"{part_kind_name} Partitions")
         # print(json.dumps(parts, indent=4))
         part_table = TableFormatter()
@@ -244,7 +259,7 @@ def cmd_mount(state: CmdState):
     if read_only:
         mount_options.append("ro")
 
-    resp = confirm_cmdline(
+    confirm_cmdline(
         [
             "sudo",
             "mount",
@@ -255,8 +270,6 @@ def cmd_mount(state: CmdState):
         ]
     )
 
-    print("mount to", mountpoint)
-
 
 def confirm_cmdline(cmdline: List[str]):
     cmdline_j = shlex.join(cmdline)
@@ -266,7 +279,39 @@ def confirm_cmdline(cmdline: List[str]):
 
 
 def cmd_unmount(state: CmdState):
-    cmd_show_mounting(state)
+    cmd_show_mounting(state, flip=True)
+    options = list(state.mounted.keys()) + ["abort"]
+    resp = input_options(options, "Which partition do you want to unmount? ")
+    if resp == "abort":
+        return
+
+    part = state.mounted[resp]
+    confirm_cmdline(
+        [
+            "sudo",
+            "umount",
+            part["mountpoint"],
+        ]
+    )
+
+
+def cmd_eject(state: CmdState):
+    print_heading(f"Disks")
+    # print(json.dumps(parts, indent=4))
+    part_table = TableFormatter()
+    for key, disk in state.disks_dict.items():
+        disk2 = {}
+        disk2["#"] = key
+        disk2.update(disk)
+        part_table.append(
+            disk2,
+            False,
+            align={
+                "size": ">",
+                "serial": ">",
+            },
+        )
+    part_table.print()
 
 
 def main():
@@ -296,6 +341,8 @@ def main():
             cmd_show_disks(state)
         elif action == "parts":
             cmd_show_parts(state)
+        elif action == "eject":
+            cmd_eject(state)
         elif action == "quit":
             break
         else:
