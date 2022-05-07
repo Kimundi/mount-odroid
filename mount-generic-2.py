@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 import json
@@ -54,7 +55,7 @@ def filter_disk(dev: Device):
         "rm": passthrough,
     }
 
-    print(dev.json(indent=4))
+    # print(dev.json(indent=4))
 
     return {k: keys[k](dev.dict(), k) for k in keys}
 
@@ -84,7 +85,15 @@ def filter_part(dev: Device):
     return {k: keys[k](dev.dict(), k) for k in keys}
 
 
-def main():
+@dataclass
+class CmdState:
+    disks: List[dict]
+    parts: List[dict]
+    mounted: Dict[str, dict]
+    unmounted: Dict[str, dict]
+
+
+def cmd_state() -> CmdState:
     devices = DeviceList().devices
 
     disks = []
@@ -99,10 +108,27 @@ def main():
         elif device.type == "part":
             parts.append(filter_part(device))
 
+    mounted = {}
+    unmounted = {}
+    for part in parts:
+        if part.get("mountpoint"):
+            mounted[f"M{len(mounted)}"] = part
+        else:
+            unmounted[f"U{len(unmounted)}"] = part
+
+    return CmdState(
+        disks=disks,
+        parts=parts,
+        mounted=mounted,
+        unmounted=unmounted,
+    )
+
+
+def cmd_disks(state: CmdState):
     print("[Disks]")
     # print(json.dumps(disks, indent=4))
     disk_table = TableFormatter()
-    for disk in disks:
+    for disk in state.disks:
         disk_table.append(
             disk,
             False,
@@ -113,10 +139,12 @@ def main():
         )
     disk_table.print()
 
+
+def cmd_parts(state: CmdState):
     print("[Partitions]")
     # print(json.dumps(parts, indent=4))
     part_table = TableFormatter()
-    for part in parts:
+    for part in state.parts:
         part_table.append(
             part,
             False,
@@ -128,6 +156,84 @@ def main():
             },
         )
     part_table.print()
+
+
+def cmd_mounting(state: CmdState):
+    action = "initial"
+    while action != "back":
+        for part_kind_name, part_dict in [
+            ("Mounted", state.mounted),
+            ("Unmounted", state.unmounted),
+        ]:
+            print(f"[{part_kind_name} Partitions]")
+            # print(json.dumps(parts, indent=4))
+            part_table = TableFormatter()
+            for key, part in part_dict.items():
+                part2 = {}
+                part2["#"] = key
+                part2.update(part)
+                del part2["uuid"]
+                part_table.append(
+                    part2,
+                    False,
+                    align={
+                        "size": ">",
+                        "fssize": ">",
+                        "fsavail": ">",
+                        "serial": ">",
+                    },
+                )
+            part_table.print()
+
+        # print("What do you want to do?")
+
+        action = ask_options(
+            [
+                "mount",
+                "unmount",
+                "back",
+            ]
+        )
+
+        if action == "mount":
+            pass
+        elif action == "unmount":
+            pass
+
+
+def main():
+    cmd_mounting(cmd_state())
+    while True:
+        state = cmd_state()
+        action = ask_options(
+            [
+                "mounting",
+                "disks",
+                "parts",
+                "quit",
+            ]
+        )
+        if action == "mounting":
+            cmd_mounting(state)
+        elif action == "disks":
+            cmd_disks(state)
+        elif action == "parts":
+            cmd_parts(state)
+        else:
+            break
+
+
+def ask_options(cases: list) -> str:
+    while True:
+        v = input("[" + ",".join(cases) + "]? ").lower()
+        selected = set()
+        for case in cases:
+            if case.lower().startswith(v):
+                selected.add(case)
+        if len(selected) == 1:
+            return next(iter(selected))
+        else:
+            print("Invalid input")
 
 
 if __name__ == "__main__":
