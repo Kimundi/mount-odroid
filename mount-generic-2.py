@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 import json
-import pprint
 import copy
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ValidationError, Extra
+from rich import print
 
 from table_formatting import TableFormatter
 from system_query import Device, DeviceList
@@ -124,8 +124,12 @@ def cmd_state() -> CmdState:
     )
 
 
-def cmd_disks(state: CmdState):
-    print("[Disks]")
+def print_heading(n: str):
+    print(f"[bright_green]\[{n}][/]")
+
+
+def cmd_show_disks(state: CmdState):
+    print_heading("Disks")
     # print(json.dumps(disks, indent=4))
     disk_table = TableFormatter()
     for disk in state.disks:
@@ -140,8 +144,8 @@ def cmd_disks(state: CmdState):
     disk_table.print()
 
 
-def cmd_parts(state: CmdState):
-    print("[Partitions]")
+def cmd_show_parts(state: CmdState):
+    print_heading("Partitions")
     # print(json.dumps(parts, indent=4))
     part_table = TableFormatter()
     for part in state.parts:
@@ -158,74 +162,75 @@ def cmd_parts(state: CmdState):
     part_table.print()
 
 
-def cmd_mounting(state: CmdState):
-    action = "initial"
-    while action != "back":
-        for part_kind_name, part_dict in [
-            ("Mounted", state.mounted),
-            ("Unmounted", state.unmounted),
-        ]:
-            print(f"[{part_kind_name} Partitions]")
-            # print(json.dumps(parts, indent=4))
-            part_table = TableFormatter()
-            for key, part in part_dict.items():
-                part2 = {}
-                part2["#"] = key
-                part2.update(part)
-                del part2["uuid"]
-                part_table.append(
-                    part2,
-                    False,
-                    align={
-                        "size": ">",
-                        "fssize": ">",
-                        "fsavail": ">",
-                        "serial": ">",
-                    },
-                )
-            part_table.print()
+def cmd_show_mounting(state: CmdState):
+    for part_kind_name, part_dict in [
+        ("Mounted", state.mounted),
+        ("Unmounted", state.unmounted),
+    ]:
+        print_heading(f"{part_kind_name} Partitions")
+        # print(json.dumps(parts, indent=4))
+        part_table = TableFormatter()
+        for key, part in part_dict.items():
+            part2 = {}
+            part2["#"] = key
+            part2.update(part)
+            del part2["uuid"]
+            part_table.append(
+                part2,
+                False,
+                align={
+                    "size": ">",
+                    "fssize": ">",
+                    "fsavail": ">",
+                    "serial": ">",
+                },
+            )
+        part_table.print()
 
-        # print("What do you want to do?")
 
-        action = ask_options(
-            [
-                "mount",
-                "unmount",
-                "back",
-            ]
-        )
+def cmd_mount(state: CmdState):
+    cmd_show_mounting(state)
 
-        if action == "mount":
-            pass
-        elif action == "unmount":
-            pass
+
+def cmd_unmount(state: CmdState):
+    cmd_show_mounting(state)
 
 
 def main():
-    cmd_mounting(cmd_state())
+    cmd_show_mounting(cmd_state())
     while True:
         state = cmd_state()
         action = ask_options(
             [
-                "mounting",
                 "disks",
                 "parts",
+                "mount",
+                "unmount",
+                "eject",
+                "smart",
                 "quit",
             ]
         )
-        if action == "mounting":
-            cmd_mounting(state)
+        if action == "mount":
+            cmd_mount(state)
+        elif action == "unmount":
+            cmd_unmount(state)
         elif action == "disks":
-            cmd_disks(state)
+            cmd_show_disks(state)
         elif action == "parts":
-            cmd_parts(state)
-        else:
+            cmd_show_parts(state)
+        elif action == "quit":
             break
+        else:
+            print(f"NOT IMPLEMENTED YET: {action}")
 
 
 def ask_options(cases: list) -> str:
     while True:
-        v = input("[" + ",".join(cases) + "]? ").lower()
+        print(
+            "\[" + ",".join(f"[bright_blue]{case}[/]" for case in cases) + "]? ", end=""
+        )
+        v = input().lower()
         selected = set()
         for case in cases:
             if case.lower().startswith(v):
