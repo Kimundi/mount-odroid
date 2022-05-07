@@ -1,5 +1,7 @@
+from pathlib import Path
 import subprocess
 import json
+import os
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Extra
 
@@ -59,6 +61,7 @@ class Device(BaseModel, extra=Extra.allow):
     kname: str
     type: str
     path: str
+    _path: str
     model: Optional[str]
     fstype: Optional[str]
     partuuid: Optional[str]
@@ -99,16 +102,31 @@ class DeviceList:
         return json.loads(out)
 
     def parse_disk(self, raw: Dict[str, Any], parent: Optional[Device]):
+        # remove children to flatten the object
         children = raw.pop("children", [])
 
+        # replace device path by label paths if available
+        path = raw.get("path")
+        label = raw.get("label")
+        raw["_path"] = path
+        if label is not None:
+            link = Path(f"/dev/disk/by-label/{label}")
+            if link.exists():
+                target = str(os.path.realpath(link))
+                if target == path:
+                    raw["path"] = str(link)
+
+        # parse device info
         obj = Device.parse_obj(raw)
         obj._parent = parent
 
+        # parse mounts as well
         if (path := obj.path) is not None:
             mounts = MountList(path).mounts
             obj._mounts = mounts
 
         self.devices.append(obj)
 
+        # recursively parse children
         for child in children:
             self.parse_disk(child, obj)

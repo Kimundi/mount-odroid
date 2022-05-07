@@ -246,9 +246,7 @@ def cmd_mount(state: CmdState):
             else:
                 cmdline = []
             cmdline.extend(["mkdir", "-p", str(mountpoint)])
-            resp = confirm_cmdline(cmdline)
-            if resp == "no":
-                return
+            resp = confirm_cmdline(cmdline, no_ask=True)
 
     read_only = input_options(["yes", "no"], "Mount read-only? ")
     read_only = read_only != "no"
@@ -269,13 +267,6 @@ def cmd_mount(state: CmdState):
             mountpoint_default,
         ]
     )
-
-
-def confirm_cmdline(cmdline: List[str]):
-    cmdline_j = shlex.join(cmdline)
-    resp = input_options(["yes", "no"], f"Execute `{cmdline_j}`? ")
-    subprocess.run(cmdline, check=True)
-    return resp
 
 
 def cmd_unmount(state: CmdState):
@@ -325,8 +316,8 @@ def main():
                     "parts",
                     "mount",
                     "unmount",
-                    "eject",
-                    "smart",
+                    # "eject",
+                    # "smart",
                     "quit",
                 ]
             )
@@ -349,16 +340,27 @@ def main():
             print(f"NOT IMPLEMENTED YET: {action}")
 
 
-def input_options(cases: list, msg=None) -> str:
-    while True:
-        if not msg:
-            msg = ""
+def confirm_cmdline(cmdline: List[str], no_ask=False):
+    if no_ask:
+        resp = "yes"
+    else:
+        cmdline_j = shlex.join(cmdline)
+        resp = input_options(["yes", "no"], f"Execute `{cmdline_j}`? ")
 
-        msg = (
+    if resp == "yes":
+        subprocess.run(cmdline, check=True)
+
+    return resp
+
+
+def input_options(cases: list, msg=None) -> str:
+    if not msg:
+        msg = ""
+    while True:
+        msg2 = (
             msg + f"\[" + ",".join(f"[bright_blue]{case}[/]" for case in cases) + "]: "
         )
-
-        v = input(msg).lower()
+        v = input(msg2).lower()
         selected = set()
         for case in cases:
             if case.lower().startswith(v):
