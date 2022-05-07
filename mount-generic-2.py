@@ -8,9 +8,23 @@ import copy
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ValidationError, Extra
 from rich import print
+from rich.markup import escape
+import shlex
+import subprocess
 
 from table_formatting import TableFormatter
 from system_query import Device, DeviceList
+
+old_input = input
+
+
+def input(prompt=None, default=None) -> str:
+    if prompt:
+        print(prompt, end="")
+    ret = old_input()
+    if ret.strip() == "" and default:
+        return default
+    return ret
 
 
 def passthrough(obj: Dict[str, Any], key: str) -> Any:
@@ -43,7 +57,7 @@ def parent(obj: Dict[str, Any], key: str) -> Any:
     return passthrough(obj, key)
 
 
-def filter_disk(dev: Device):
+def filter_disk(dev: Device) -> Dict[str, Any]:
     keys = {
         "path": passthrough,
         "size": sizefmt,
@@ -190,6 +204,65 @@ def cmd_show_mounting(state: CmdState):
 
 def cmd_mount(state: CmdState):
     cmd_show_mounting(state)
+    options = list(state.unmounted.keys()) + ["abort"]
+    resp = input_options(options, "Which partition do you want to mount? ")
+    if resp == "abort":
+        return
+
+    part = state.unmounted[resp]
+    label = part.get("label")
+    if label is None:
+        label = "unlabeled"
+
+    mountpoint_default = f"/disks/{label}"
+    mountpoint = Path(
+        input(f"Mountpoint? \[{mountpoint_default}]: ", default=mountpoint_default)
+    )
+
+    if not mountpoint.exists():
+        resp = input_options(
+            ["yes", "sudo_yes", "no"], f"Create directory for mountpoint {mountpoint}? "
+        )
+        if resp == "no":
+            return
+        elif resp in ("yes", "sudo_yes"):
+            if resp == "sudo_yes":
+                cmdline = ["sudo"]
+            else:
+                cmdline = []
+            cmdline.extend(["mkdir", "-p", str(mountpoint)])
+            resp = confirm_cmdline(cmdline)
+            if resp == "no":
+                return
+
+    read_only = input_options(["yes", "no"], "Mount read-only? ")
+    read_only = read_only != "no"
+
+    mount_options = [
+        "noatime",
+    ]
+    if read_only:
+        mount_options.append("ro")
+
+    resp = confirm_cmdline(
+        [
+            "sudo",
+            "mount",
+            "-o",
+            ",".join(mount_options),
+            part["path"],
+            mountpoint_default,
+        ]
+    )
+
+    print("mount to", mountpoint)
+
+
+def confirm_cmdline(cmdline: List[str]):
+    cmdline_j = shlex.join(cmdline)
+    resp = input_options(["yes", "no"], f"Execute `{cmdline_j}`? ")
+    subprocess.run(cmdline, check=True)
+    return resp
 
 
 def cmd_unmount(state: CmdState):
@@ -200,17 +273,21 @@ def main():
     cmd_show_mounting(cmd_state())
     while True:
         state = cmd_state()
-        action = ask_options(
-            [
-                "disks",
-                "parts",
-                "mount",
-                "unmount",
-                "eject",
-                "smart",
-                "quit",
-            ]
-        )
+        try:
+            action = input_options(
+                [
+                    "disks",
+                    "parts",
+                    "mount",
+                    "unmount",
+                    "eject",
+                    "smart",
+                    "quit",
+                ]
+            )
+        except KeyboardInterrupt:
+            action = "quit"
+
         if action == "mount":
             cmd_mount(state)
         elif action == "unmount":
@@ -225,12 +302,16 @@ def main():
             print(f"NOT IMPLEMENTED YET: {action}")
 
 
-def ask_options(cases: list) -> str:
+def input_options(cases: list, msg=None) -> str:
     while True:
-        print(
-            "\[" + ",".join(f"[bright_blue]{case}[/]" for case in cases) + "]? ", end=""
+        if not msg:
+            msg = ""
+
+        msg = (
+            msg + f"\[" + ",".join(f"[bright_blue]{case}[/]" for case in cases) + "]: "
         )
-        v = input().lower()
+
+        v = input(msg).lower()
         selected = set()
         for case in cases:
             if case.lower().startswith(v):
